@@ -2,17 +2,17 @@
   --paper: #dff6ff;
   --ink: #27334a;
   --muted: #64758a;
-  --line: #9acadd;
-  --lime: #ffd34e;
+  --line: #ad81bc;
+  --lime: #329cf1;
   --lime-dark: #8b5d00;
-  --rust: #f36b55;
+  --rust: #1239fc;
   --white: #fffdf5;
   --grass: #76c95b;
   --shadow: #27334a;
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; color: var(--ink); background: #b9edff; font-family: "Space Grotesk", sans-serif; }
+body { margin: 0; min-width: 320px; color: var(--ink); background: #b9edff; font-family: "Poppins", sans-serif; }
 button { font: inherit; }
 .app-shell { position: relative; max-width: 1440px; margin: 0 auto; padding: 28px 5vw 22px; }
 .topbar, .footer, .panel-head, .feed-heading { display: flex; align-items: center; justify-content: space-between; }
