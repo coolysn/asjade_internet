@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="et">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#8dd9f7" />
+    <title>Sõnajaht | veebikontroller</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="./" aria-label="Sõnajaht avaleht">
+          <span class="brand-mark">S</span>
+          <span>SÕNAJAHT</span>
+        </a>
+        <div class="connection-status"><span class="status-dot"></span> Kohalik teenus töötab</div>
+        <div class="session-id">SESSIOON <span id="sessionId">SJ-001</span></div>
+      </header>
+
+      <section class="hero-row">
+        <div>
+          <p class="eyebrow">Sõnade seiklus / 01</p>
+          <h1>Arva sõna.<br /><em>Päästa sõber!</em></h1>
+        </div>
+        <p class="intro">Poomismäng, kus veebikontroller aitab valida uue sõna ja küsida sama sõna mängijalt. Kõik sündmused salvestuvad selles brauseris.</p>
+      </section>
+
+      <section class="dashboard" aria-label="Mängu juhtpaneel">
+        <div class="game-panel panel">
+          <div class="panel-head">
+            <div>
+              <span class="panel-index">01 / MÄNGULAUD</span>
+              <h2 id="roundTitle">Voor 04</h2>
+            </div>
+            <span class="category-pill" id="categoryLabel">LOODUS</span>
+          </div>
+
+          <div class="game-stage">
+            <div class="hangman-wrap" aria-label="Poomismängu joonis">
+              <svg class="hangman" viewBox="0 0 220 220" role="img" aria-label="Poomismängu hetkeseis">
+                <path class="wood" d="M28 202h165M58 202V22h104M58 44h52M154 22v26" />
+                <circle id="head" class="figure-piece" cx="110" cy="72" r="21" />
+                <path id="body" class="figure-piece" d="M110 93v57M110 108 84 133M110 108l26 25M110 150 88 184M110 150l22 34" />
+              </svg>
+              <div class="mistakes"><strong id="mistakeCount">0</strong><span>/ 6 viga</span></div>
+            </div>
+            <div class="word-area">
+              <p class="word-label">PEIDETUD SÕNA</p>
+              <div id="wordDisplay" class="word-display" aria-live="polite">_ _ _ _ _ _</div>
+              <p id="gameMessage" class="game-message">Vali täht või küsi mängijalt vihje.</p>
+              <div class="used-letters"><span>KASUTATUD</span><div id="usedLetters">—</div></div>
+            </div>
+          </div>
+
+          <div class="keyboard" id="keyboard" aria-label="Tähevalik"></div>
+        </div>
+
+        <aside class="control-panel panel">
+          <div class="panel-head compact">
+            <div><span class="panel-index">02 / KONTROLLER</span><h2>Juhi vooru</h2></div>
+            <span class="live-badge">LIVE</span>
+          </div>
+          <div class="control-actions">
+            <button class="primary-action" id="newWordButton" type="button"><span class="button-icon">+</span><span><strong>Uus sõna</strong><small>Alusta uut vooru</small></span><span class="arrow">↗</span></button>
+            <button class="secondary-action" id="askWordButton" type="button"><span class="button-icon">?</span><span><strong>Küsi sama sõna</strong><small>Saada küsimus ekraanile</small></span><span class="arrow">↗</span></button>
+          </div>
+          <div class="control-divider"></div>
+          <div class="service-feed">
+            <div class="feed-heading"><span>TEENUSE LOGI</span><span id="eventCount">03 sündmust</span></div>
+            <div id="eventLog" class="event-log"></div>
+          </div>
+          <div class="stats-row">
+            <div><span class="stat-value" id="roundStat">04</span><span>vooru</span></div>
+            <div><span class="stat-value" id="scoreStat">01</span><span>võitu</span></div>
+            <div><span class="stat-value" id="streakStat">02</span><span>järjest</span></div>
+          </div>
+        </aside>
+      </section>
+
+      <footer class="footer"><span>SÕNAJAHT / KONTROLLER</span><span>Andmed püsivad ainult selles seadmes</span><span>v1.0.0</span></footer>
+    </main>
+  </body>
+</html>
