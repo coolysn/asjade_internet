@@ -41,11 +41,16 @@
           </div>
 
           <div class="game-stage">
-            <div class="hangman-wrap" aria-label="Poomismängu joonis">
-              <svg class="hangman" viewBox="0 0 220 220" role="img" aria-label="Poomismängu hetkeseis">
-                <path class="wood" d="M28 202h165M58 202V22h104M58 44h52M154 22v26" />
-                <circle id="head" class="figure-piece" cx="110" cy="72" r="21" />
-                <path id="body" class="figure-piece" d="M110 93v57M110 108 84 133M110 108l26 25M110 150 88 184M110 150l22 34" />
+            <div class="hangman-wrap" aria-label="Lille kasvamise joonis">
+              <svg class="hangman flower" viewBox="0 0 220 220" role="img" aria-label="Lille hetkeseis">
+                <path class="stem" d="M110 195V112M110 164 78 143M110 177l31-24" />
+                <path class="leaf" d="M108 164c-25-15-37-13-43-5 15 17 30 16 43 5M112 177c23-14 35-12 41-4-14 16-28 15-41 4" />
+                <circle id="petalOne" class="flower-piece" cx="110" cy="86" r="27" />
+                <circle id="petalTwo" class="flower-piece" cx="77" cy="86" r="27" />
+                <circle id="petalThree" class="flower-piece" cx="143" cy="86" r="27" />
+                <circle id="petalFour" class="flower-piece" cx="92" cy="57" r="27" />
+                <circle id="petalFive" class="flower-piece" cx="128" cy="57" r="27" />
+                <circle id="flowerCenter" class="flower-center" cx="110" cy="75" r="18" />
               </svg>
               <div class="mistakes"><strong id="mistakeCount">0</strong><span>/ 6 viga</span></div>
             </div>

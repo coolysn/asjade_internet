@@ -36,3 +36,8 @@ button { font: inherit; }
 .primary-action, .secondary-action { border: 2px solid var(--ink); border-radius: 7px; }
 .primary-action:hover, .secondary-action:hover { transform: translateY(-1px); box-shadow: 2px 2px 0 var(--ink); }
 .footer { color: var(--ink); }
+
+.flower .stem, .flower .leaf { fill: none; }
+.flower-piece { fill: var(--rust); opacity: 0; transition: opacity .2s ease; }
+.flower-piece.visible { opacity: 1; }
+.flower-center { fill: var(--lime); stroke: var(--ink); stroke-width: 5; }

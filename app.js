@@ -63,7 +63,9 @@ function render() {
   $("#eventCount").textContent = `${String(state.events.length).padStart(2, "0")} sündmust`;
   $("#gameMessage").textContent = service.isWon() ? "Sõna on leitud. Alusta uut vooru!" : state.mistakes >= 6 ? `Õige sõna oli ${current.word}.` : "Vali täht või küsi mängijalt vihjet.";
   $("#eventLog").innerHTML = state.events.map((event) => `<div class="event"><time>${event.time}</time><p>${event.text}</p></div>`).join("");
-  ["head", "body"].forEach((id) => $("#" + id).classList.toggle("visible", state.mistakes >= (id === "head" ? 1 : 2)));
+  ["petalOne", "petalTwo", "petalThree", "petalFour", "petalFive", "flowerCenter"].forEach((id, index) => {
+    $("#" + id).classList.toggle("visible", state.mistakes >= index + 1);
+  });
   $("#keyboard").innerHTML = ALPHABET.map((letter) => `<button class="key ${state.guessed.includes(letter) ? (current.word.includes(letter) ? "hit" : "miss") : ""}" type="button" ${state.guessed.includes(letter) || service.isOver() ? "disabled" : ""} data-letter="${letter}">${letter}</button>`).join("");
 }
 
