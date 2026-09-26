@@ -1,5 +1,5 @@
 const KONTROLLER =
-  "https://script.google.com/macros/s/AKfycbyeP6TV-C4bfMThQ-iNky07Yi7Lyd5DE3oE7l375cXhn2sxAtjSGAUec1C4AY5_Uyb7gg/exec";
+  "https://script.google.com/macros/s/AKfycbxVYdciHTNOCCApm4CnTktYTC3NTX4dxHvhdq4zPsZb0lUWM_GbPsuw6mkXpWFhaG_fYg/exec";
 
 const vastus = document.getElementById("vastus");
 const uusNupp = document.getElementById("uus");
