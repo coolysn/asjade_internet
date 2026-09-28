@@ -1,0 +1,119 @@
+<!doctype html>
+<html>
+<head>
+  <title>Video</title>
+  <p>Sinine tähendab "jah", Oranž tähendab "ei"</p>
+
+  <script>
+    let player=null, c=null, g=null, g2=null;
+    let nr=0;
+    let vastused=[];
+    let vastatud=false;
+    let valmisVastuseks=false;
+    let varvKaadrites=0;
+    let eelmineVarv="";
+
+    let kysimused=[
+      "Kas sulle meeldib õun?",
+      "Kas sulle meeldib banaan?",
+      "Kas sulle meeldib jäätis?"
+    ];
+
+    function start(){
+      player=document.getElementById("v1");
+      c=document.getElementById("c1");
+      g=c.getContext("2d");
+      g2=document.getElementById("c2").getContext("2d");
+
+      document.getElementById("s1").innerHTML=kysimused[nr];
+
+      navigator.mediaDevices.getUserMedia({video:true}).then((stream)=>{
+        player.srcObject=stream;
+      });
+
+      setInterval(capture,200);
+    }
+
+    function capture(){
+      g.drawImage(player,0,0,c.width,c.height);
+
+      g.strokeRect(98,98,44,44);
+
+      let d=g.getImageData(100,100,40,40);
+
+      g2.putImageData(d,0,0);
+
+      let r=d.data[0];
+      let green=d.data[1];
+      let b=d.data[2];
+      let varv="";
+
+      if(b>r && b>green){
+        varv="sinine";
+      }
+      else if(r>100 && green>50 && b<50){
+        varv="oranž";
+      }
+
+      document.getElementById("varv").textContent =
+        varv==="" ? "Tuvastatud värv: värvi ei tuvastatud" :
+        "Tuvastatud värv: " + varv;
+
+      if(vastatud==false){
+        // Enne uue vastuse lubamist peab kaamera nägema neutraalset vaadet.
+        if(varv===""){
+          valmisVastuseks=true;
+          varvKaadrites=0;
+          eelmineVarv="";
+        }
+        else if(valmisVastuseks && varv===eelmineVarv){
+          varvKaadrites++;
+        }
+        else if(valmisVastuseks){
+          eelmineVarv=varv;
+          varvKaadrites=1;
+        }
+
+        if(valmisVastuseks && varvKaadrites>=3){
+          vastused.push(varv==="sinine" ? "Jah" : "Ei");
+          vastatud=true;
+          järgmine();
+        }
+      }
+    }
+
+    function järgmine(){
+      nr++;
+      vastatud=false;
+      valmisVastuseks=false;
+      varvKaadrites=0;
+      eelmineVarv="";
+
+      if(nr<kysimused.length){
+        document.getElementById("s1").innerHTML=kysimused[nr];
+      }
+      else{
+        document.getElementById("s1").innerHTML="Vastused:<br>";
+
+        for(let i=0;i<kysimused.length;i++){
+          document.getElementById("s1").innerHTML +=
+            kysimused[i]+" - "+vastused[i]+"<br>";
+        }
+      }
+    }
+  </script>
+</head>
+
+<body onload="start()">
+
+  <span id="s1"></span><br>
+
+  <video id="v1" controls autoplay style="width:45%"></video>
+
+  <canvas id="c1" width="320" height="240" style="width:45%"></canvas><br>
+
+  <canvas id="c2" width="40" height="40"></canvas>
+  <p id="varv">Tuvastatud värv: värvi ei tuvastatud</p>
+
+</body>
+</html>
