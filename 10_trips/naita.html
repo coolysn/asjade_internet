@@ -1,0 +1,131 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trips-traps-trull – arvutivaade</title>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
+  <script>
+    // Sama Apps Scripti /exec aadress, mis index.html failis
+    const KONTROLLER = "https://script.google.com/macros/s/AKfycbyaMhYfWB3IJXYZ1GuEBN9yzcxFqV-Ou9HGwo2_83xJ_9v0UlO8nqnsWL4lsXxkkZwg/exec";
+    let viimaneLaud="";
+    let peer=null, videoCall=null;
+    let telefoniPeerId="";
+
+    // Küsib serverilt viimase seisu ja joonistab selle
+    let paringuNr=0, joonistatudNr=0;
+    async function uuenda(){
+      let minuNr=++paringuNr;
+      try{
+        let vastus=await fetch(KONTROLLER+"?kask=seis&t="+Date.now(),{cache:"no-store",signal:AbortSignal.timeout(8000)});
+        let osad=(await vastus.text()).split("|");   // laud | kes | ruut
+        if(minuNr<joonistatudNr) return;             // hilinenud vana vastus
+        joonistatudNr=minuNr;
+        joonista(osad[0],osad[1]||"");
+        document.getElementById("ühendus").textContent="Live ühendus: korras · "+new Date().toLocaleTimeString();
+        laeTelefoniId();
+      }
+      catch(e){
+        document.getElementById("s1").textContent="Serveriga ei saa ühendust...";
+        document.getElementById("ühendus").textContent="Live ühendus puudub";
+      }
+    }
+
+    async function laeTelefoniId(){
+      try{
+        // Loeb signaaliserverist (mitte Google Apps Script'ist)
+        let vastus=await fetch("/peer-id?t="+Date.now());
+        let obj=await vastus.json();
+        let id=obj.id||"";
+        if(id && id.length>0 && id!==telefoniPeerId){
+          telefoniPeerId=id;
+          document.getElementById("telefoniId").value=id;
+          if(videoCall==null || videoCall.closed){
+            ühendaKaameraAuto(id);
+          }
+        }
+      }
+      catch(e){}
+    }
+
+    function joonista(laud,kes){
+      if(!/^[_XO]{9}$/.test(laud)) return;
+      viimaneLaud=laud;
+
+      for(let i=0;i<9;i++){
+        let ruut=document.getElementById("r"+i);
+        ruut.style.background=laud[i]==="X" ? "blue" : laud[i]==="O" ? "red" : "white";
+      }
+
+      let tekst="";
+      if(kes==="lõpp-sinine") tekst="Sinine (inimene) võitis!";
+      else if(kes==="lõpp-punane") tekst="Punane (arvuti) võitis!";
+      else if(kes==="lõpp-viik") tekst="Viik!";
+      else if(kes==="sinine") tekst="Arvuti käib (punane)...";
+      else tekst="Inimese käik (sinine)";
+      document.getElementById("s1").textContent=tekst;
+    }
+
+    function ühendaKaamera(){
+      let id=document.getElementById("telefoniId").value.trim();
+      if(!id){
+        document.getElementById("videoStaatus").textContent="Sisesta telefoni ühenduse ID.";
+        return;
+      }
+      ühendaKaameraAuto(id);
+    }
+
+    function ühendaKaameraAuto(id){
+      if(videoCall!=null && !videoCall.closed){
+        return;
+      }
+      if(!peer){
+        peer=new Peer();
+        peer.on("error",(error)=>{
+          document.getElementById("videoStaatus").textContent="Videoühenduse viga: "+error.type;
+        });
+      }
+      if(peer.open) käivitaVideokõne(id);
+      else peer.on("open",()=>käivitaVideokõne(id));
+    }
+
+    function käivitaVideokõne(id){
+      videoCall=peer.call(id,null);
+      document.getElementById("videoStaatus").textContent="Telefoni ühendamine...";
+      videoCall.on("stream",(stream)=>{
+        document.getElementById("remoteVideo").srcObject=stream;
+        document.getElementById("videoStaatus").textContent="Telefoni kaamera on ühendatud.";
+      });
+      videoCall.on("close",()=>{
+        document.getElementById("videoStaatus").textContent="Telefoni videoühendus katkes.";
+      });
+    }
+  </script>
+</head>
+
+<body onload="uuenda();setInterval(uuenda,1000)" style="margin:0;padding:16px;font-family:sans-serif;text-align:center;background:#f4f6f8">
+  <h1 id="s1">Laen...</h1>
+  <p id="ühendus" aria-live="polite">Live ühenduse loomine...</p>
+  <p>Hoia see leht arvutis lahti. Telefonis ava <strong>index.html</strong> ja mängi paberilaua ees.</p>
+  <section style="max-width:700px;margin:16px auto">
+    <h2>Telefoni kaamera</h2>
+    <p id="videoStaatus">Telefonist otsitakse ühenduse ID...</p>
+    <input id="telefoniId" type="text" placeholder="Telefoni PeerJS ID" autocomplete="off"
+      style="font-size:18px;padding:8px;width:min(90%,360px)">
+    <button onclick="ühendaKaamera()" style="font-size:18px;padding:8px 14px">Ühenda kaamera</button>
+  </section>
+
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:min(80vmin,600px);margin:24px auto">
+    <div id="r0" style="aspect-ratio:1;border:3px solid black"></div>
+    <div id="r1" style="aspect-ratio:1;border:3px solid black"></div>
+    <div id="r2" style="aspect-ratio:1;border:3px solid black"></div>
+    <div id="r3" style="aspect-ratio:1;border:3px solid black"></div>
+    <div id="r4" style="aspect-ratio:1;border:3px solid black"></div>
+    <div id="r5" style="aspect-ratio:1;border:3px solid black"></div>
+    <div id="r6" style="aspect-ratio:1;border:3px solid black"></div>
+    <div id="r7" style="aspect-ratio:1;border:3px solid black"></div>
+    <div id="r8" style="aspect-ratio:1;border:3px solid black"></div>
+  </div>
+</body>
+</html>
