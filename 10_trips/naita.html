@@ -4,54 +4,74 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Trips-traps-trull – arvutivaade</title>
-  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="peerjs.min.js"></script>
 
   <script>
-    // Sama Apps Scripti /exec aadress, mis index.html failis
-    const KONTROLLER = "https://script.google.com/macros/s/AKfycbyaMhYfWB3IJXYZ1GuEBN9yzcxFqV-Ou9HGwo2_83xJ_9v0UlO8nqnsWL4lsXxkkZwg/exec";
-    let viimaneLaud="";
-    let peer=null, videoCall=null;
+    let peer=null, videoCall=null, kõneAlgus=0;
     let telefoniPeerId="";
 
-    // Küsib serverilt viimase seisu ja joonistab selle
+    // Mängu seis tuleb samast serverist, mis lehe serveerib
     let paringuNr=0, joonistatudNr=0;
     async function uuenda(){
       let minuNr=++paringuNr;
       try{
-        let vastus=await fetch(KONTROLLER+"?kask=seis&t="+Date.now(),{cache:"no-store",signal:AbortSignal.timeout(8000)});
-        let osad=(await vastus.text()).split("|");   // laud | kes | ruut
+        let vastus=await fetch("/seis",{cache:"no-store",signal:AbortSignal.timeout(4000)});
+        let seis=await vastus.json();
         if(minuNr<joonistatudNr) return;             // hilinenud vana vastus
         joonistatudNr=minuNr;
-        joonista(osad[0],osad[1]||"");
+        joonista(seis.laud,seis.kes||"");
         document.getElementById("ühendus").textContent="Live ühendus: korras · "+new Date().toLocaleTimeString();
-        laeTelefoniId();
       }
       catch(e){
         document.getElementById("s1").textContent="Serveriga ei saa ühendust...";
         document.getElementById("ühendus").textContent="Live ühendus puudub";
       }
+      laeTelefoniId();
+    }
+
+    // Avamisel tühjendatakse ruudud, kuni serverist tuleb värske vastus
+    function alustaVaade(){
+      for(let i=0;i<9;i++) document.getElementById("r"+i).style.background="white";
+      document.getElementById("s1").textContent="Laen värsket seisu...";
+      uuenda();
+      setInterval(uuenda,700);
+    }
+
+    function sulgeKõne(){
+      if(videoCall){
+        let k=videoCall;
+        videoCall=null;
+        try{ k.close(); }catch(e){}
+      }
     }
 
     async function laeTelefoniId(){
       try{
-        // Loeb signaaliserverist (mitte Google Apps Script'ist)
-        let vastus=await fetch("/peer-id?t="+Date.now());
+        let vastus=await fetch("/peer-id",{cache:"no-store",signal:AbortSignal.timeout(4000)});
         let obj=await vastus.json();
-        let id=obj.id||"";
-        if(id && id.length>0 && id!==telefoniPeerId){
-          telefoniPeerId=id;
-          document.getElementById("telefoniId").value=id;
-          if(videoCall==null || videoCall.closed){
-            ühendaKaameraAuto(id);
-          }
+        // Üle 30 s vana ID tähendab, et telefon ei ole enam lehel
+        let id=(obj.id && obj.vanus!==null && obj.vanus<30000) ? obj.id : "";
+        let staatus=document.getElementById("videoStaatus");
+        if(!id){
+          telefoniPeerId="";
+          sulgeKõne();
+          staatus.textContent="Telefon ei ole ühendatud. Ava telefonis index.html.";
+          return;
         }
+        document.getElementById("telefoniId").value=id;
+        if(id!==telefoniPeerId){                    // telefon avati uuesti
+          telefoniPeerId=id;
+          sulgeKõne();
+        }
+        // Katkenud või liiga kaua ühendust looma jäänud kõne proovitakse uuesti
+        if(videoCall && !videoCall.open && Date.now()-kõneAlgus>10000) sulgeKõne();
+        if(!videoCall) ühendaKaameraAuto(id);
       }
       catch(e){}
     }
 
     function joonista(laud,kes){
       if(!/^[_XO]{9}$/.test(laud)) return;
-      viimaneLaud=laud;
 
       for(let i=0;i<9;i++){
         let ruut=document.getElementById("r"+i);
@@ -73,38 +93,45 @@
         document.getElementById("videoStaatus").textContent="Sisesta telefoni ühenduse ID.";
         return;
       }
+      sulgeKõne();
       ühendaKaameraAuto(id);
     }
 
     function ühendaKaameraAuto(id){
-      if(videoCall!=null && !videoCall.closed){
-        return;
-      }
-      if(!peer){
+      if(videoCall) return;
+      if(!peer || peer.destroyed){
         peer=new Peer();
         peer.on("error",(error)=>{
           document.getElementById("videoStaatus").textContent="Videoühenduse viga: "+error.type;
+          sulgeKõne();                              // järgmine uuendus proovib uuesti
         });
+        peer.on("disconnected",()=>{ try{ peer.reconnect(); }catch(e){} });
       }
       if(peer.open) käivitaVideokõne(id);
-      else peer.on("open",()=>käivitaVideokõne(id));
+      else peer.once("open",()=>{ if(!videoCall) käivitaVideokõne(id); });
     }
 
     function käivitaVideokõne(id){
-      videoCall=peer.call(id,null);
+      // PeerJS nõuab kõne alustamiseks voogu, seepärast tühi heli-/videovoog
+      let tuhiVoog=new MediaStream();
+      let kõne=peer.call(id,tuhiVoog);
+      videoCall=kõne;
+      kõneAlgus=Date.now();
       document.getElementById("videoStaatus").textContent="Telefoni ühendamine...";
-      videoCall.on("stream",(stream)=>{
+      kõne.on("stream",(stream)=>{
         document.getElementById("remoteVideo").srcObject=stream;
         document.getElementById("videoStaatus").textContent="Telefoni kaamera on ühendatud.";
       });
-      videoCall.on("close",()=>{
-        document.getElementById("videoStaatus").textContent="Telefoni videoühendus katkes.";
+      kõne.on("close",()=>{
+        if(videoCall===kõne) videoCall=null;        // laeTelefoniId ühendab uuesti
+        document.getElementById("videoStaatus").textContent="Telefoni videoühendus katkes, ühendan uuesti...";
       });
+      kõne.on("error",()=>{ if(videoCall===kõne) videoCall=null; });
     }
   </script>
 </head>
 
-<body onload="uuenda();setInterval(uuenda,1000)" style="margin:0;padding:16px;font-family:sans-serif;text-align:center;background:#f4f6f8">
+<body onload="alustaVaade()" style="margin:0;padding:16px;font-family:sans-serif;text-align:center;background:#f4f6f8">
   <h1 id="s1">Laen...</h1>
   <p id="ühendus" aria-live="polite">Live ühenduse loomine...</p>
   <p>Hoia see leht arvutis lahti. Telefonis ava <strong>index.html</strong> ja mängi paberilaua ees.</p>
@@ -113,7 +140,8 @@
     <p id="videoStaatus">Telefonist otsitakse ühenduse ID...</p>
     <input id="telefoniId" type="text" placeholder="Telefoni PeerJS ID" autocomplete="off"
       style="font-size:18px;padding:8px;width:min(90%,360px)">
-    <button onclick="ühendaKaamera()" style="font-size:18px;padding:8px 14px">Ühenda kaamera</button>
+    <button onclick="ühendaKaamera()" style="font-size:18px;padding:8px 16px">Ühenda</button>
+    <video id="remoteVideo" autoplay playsinline muted style="display:block;width:100%;max-width:640px;margin:12px auto;background:#000;border-radius:8px"></video>
   </section>
 
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:min(80vmin,600px);margin:24px auto">
