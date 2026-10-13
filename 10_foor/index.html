@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="et">
+<head>
+<meta charset="utf-8">
+<title>Foor</title>
+</head>
+<body>
+
+<h1>Foor</h1>
+
+<p>
+  <button id="yhenda">Ühenda Arduino</button>
+  <span id="yhendus">Pole ühendatud</span>
+</p>
+
+<h2>Režiim</h2>
+<p>
+  <button onclick="saada('TAVALINE')">Tavaline</button>
+  <button onclick="saada('VILKUV')">Vilkuv kollane</button>
+  <button onclick="saada('NUPP')">Nupuga ülekäik</button>
+</p>
+
+<h2>Jalakäija nupp</h2>
+<p>
+  <button onclick="saada('VAJUTA')">Vajuta, et üle minna</button>
+  <span id="nuppInfo">(töötab režiimis "Nupuga ülekäik")</span>
+</p>
+
+<h2>Fooritsükli kestus</h2>
+<p>
+  Autode roheline (5-120 s):
+  <input type="number" id="autoAeg" min="5" max="120" value="20">
+</p>
+<p>
+  Jalakäija roheline (5-60 s):
+  <input type="number" id="jalakAeg" min="5" max="60" value="10">
+</p>
+<p>
+  <button onclick="salvesta()">Salvesta</button>
+</p>
+
+<h2>Olek</h2>
+<p>Režiim: <span id="reziim">-</span></p>
+<p>Foor praegu: <span id="olek">-</span></p>
+<p>Autode roheline: <span id="auto">-</span> s, jalakäija roheline: <span id="jalak">-</span> s</p>
+
+<script>
+let kirjutaja = null;
+
+document.getElementById("yhenda").onclick = async function () {
+  if (!("serial" in navigator)) {
+    alert("Kasuta Chrome'i või Edge'i brauserit.");
+    return;
+  }
+  try {
+    const port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 9600 });
+
+    const enc = new TextEncoderStream();
+    enc.readable.pipeTo(port.writable);
+    kirjutaja = enc.writable.getWriter();
+
+    const dec = new TextDecoderStream();
+    port.readable.pipeTo(dec.writable);
+    loe(dec.readable.getReader());
+
+    document.getElementById("yhendus").textContent = "Ühendatud";
+    setTimeout(function () { saada("OLEK"); }, 2500);
+  } catch (e) {
+    document.getElementById("yhendus").textContent = "Viga: " + e.message;
+  }
+};
+
+async function saada(kask) {
+  if (!kirjutaja) {
+    alert("Ühenda enne Arduino!");
+    return;
+  }
+  await kirjutaja.write(kask + "\n");
+}
+
+async function salvesta() {
+  await saada("AUTO " + document.getElementById("autoAeg").value);
+  await saada("JALAK " + document.getElementById("jalakAeg").value);
+}
+
+async function loe(lugeja) {
+  let puhver = "";
+  while (true) {
+    const { value, done } = await lugeja.read();
+    if (done) break;
+    puhver += value;
+    let i;
+    while ((i = puhver.indexOf("\n")) >= 0) {
+      const rida = puhver.slice(0, i).trim();
+      puhver = puhver.slice(i + 1);
+      try {
+        const s = JSON.parse(rida);
+        document.getElementById("reziim").textContent = s.reziim;
+        document.getElementById("olek").textContent = s.olek;
+        document.getElementById("auto").textContent = s.auto;
+        document.getElementById("jalak").textContent = s.jalak;
+
+        let info = "(töötab režiimis \"Nupuga ülekäik\")";
+        if (s.reziim == "NUPP") {
+          if (s.olek == "JALAK_ROHELINE" || s.olek == "JALAK_VILGUB") info = "Mine üle!";
+          else if (s.soov == 1) info = "Oota rohelist...";
+          else info = "Vajuta nuppu, kui tahad üle minna.";
+        }
+        document.getElementById("nuppInfo").textContent = info;
+      } catch (e) {}
+    }
+  }
+}
+</script>
+
+</body>
+</html>
