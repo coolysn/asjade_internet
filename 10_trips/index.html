@@ -1,0 +1,374 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trips-traps-trull – kaamera</title>
+  <script src="peerjs.min.js"></script>
+
+  <script>
+    const KONTROLLER = "https://script.google.com/macros/s/AKfycbyaMhYfWB3IJXYZ1GuEBN9yzcxFqV-Ou9HGwo2_83xJ_9v0UlO8nqnsWL4lsXxkkZwg/exec";
+    let player=null, c=null, g=null;
+    let laud=["","","","","","","","",""];
+    let kaik="inimene";                      // "inimene", "arvuti" või "lõpp"
+    let arvutiRuut=-1;
+    let eelmine="";
+    let kaadreid=0;
+    let peer=null, kaameraVoog=null;
+    let lugeja=null, lugejaG=null;
+    let mangunr=0;
+    let tuvastusPausini=0;                   // liuguri liigutamise ajal käike ei tuvasta
+
+    let jooned=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+
+    function start(){
+      player=document.getElementById("v1");
+      c=document.getElementById("c1");
+      g=c.getContext("2d");
+
+      if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+        teata("Selles brauseris ei ole kaamera kasutatav. Ava leht telefonis HTTPS-i kaudu.");
+        return;
+      }
+      navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:640},height:{ideal:480},frameRate:{ideal:20,max:24}},audio:false}).then((stream)=>{
+        kaameraVoog=stream;
+        player.srcObject=stream;
+        looPeer();
+      }).catch(()=>{
+        teata("Kaamera ei käivitunud. Luba kaamera ja ava leht https-iga.");
+      });
+
+      setInterval(capture,200);
+      requestAnimationFrame(kuva);
+    }
+
+    // Sujuv pilt: joonistab video ja viimase lugemise raamid igal ekraanikaadril
+    let viimaneLugemine=[], geo=null;
+    function kuva(){
+      requestAnimationFrame(kuva);
+      if(!player.videoWidth || !geo) return;
+      if(c.width!==geo.w || c.height!==geo.h){ c.width=geo.w; c.height=geo.h; }
+      g.drawImage(player,0,0,geo.w,geo.h);
+      g.font="bold 20px sans-serif";
+      g.lineWidth=3;
+      for(let i=0;i<9;i++){
+        let x=geo.x0+(i%3)*geo.ruut;
+        let y=geo.y0+Math.floor(i/3)*geo.ruut;
+        let varv=viimaneLugemine[i];
+        g.strokeStyle=varv==="sinine" ? "blue" : varv==="punane" ? "red" : "lime";
+        g.strokeRect(x+geo.serv,y+geo.serv,geo.sisu,geo.sisu);
+        g.fillStyle="white";
+        g.fillText(i+1,x+5,y+22);
+      }
+      g.strokeStyle="white";
+      g.strokeRect(geo.x0,geo.y0,geo.ruut*3,geo.ruut*3);
+    }
+
+    function looPeer(){
+      if(typeof Peer==="undefined"){
+        document.getElementById("peerStaatus").textContent="PeerJS-i ei saanud laadida.";
+        return;
+      }
+      peer=new Peer();
+      peer.on("open",(id)=>{
+        document.getElementById("peerId").textContent=id;
+        document.getElementById("peerStaatus").textContent="Kaamera on valmis.";
+
+        // Serverisse korduvalt, et arvuti näeks, et telefon on elus
+        let teata_id=()=>fetch("/peer-id",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id}),signal:AbortSignal.timeout(4000)}).catch(()=>{});
+        teata_id();
+        setInterval(teata_id,10000);
+      });
+      peer.on("call",(call)=>{
+        if(kaameraVoog) call.answer(kaameraVoog);
+        // Piirab arvutisse saadetava video bitikiirust, et telefon ei ülekoormuks
+        call.peerConnection.getSenders().forEach((s)=>{
+          if(s.track && s.track.kind==="video"){
+            let p=s.getParameters();
+            if(!p.encodings || !p.encodings.length) p.encodings=[{}];
+            p.encodings[0].maxBitrate=600000;
+            s.setParameters(p).catch(()=>{});
+          }
+        });
+      });
+      peer.on("disconnected",()=>{ try{ peer.reconnect(); }catch(e){} });
+      peer.on("error",(error)=>{
+        document.getElementById("peerStaatus").textContent="Videoühenduse viga: "+error.type;
+      });
+    }
+
+    // Värvi tuvastus on valgustuse suhtes kohandatud:
+    // 1) valge tasakaal: laua valge paberi järgi korrigeeritakse valguse toon
+    // 2) hue/sat põhine tuvastus on ere valguse ja varju korral leebem
+    let gains=[1,1,1];
+
+    function arvutaVordlus(d){
+      let sr=0, sg=0, sb=0, n=0, kokku=0;
+      for(let i=0;i<d.data.length;i+=16){
+        let r=d.data[i], g=d.data[i+1], b=d.data[i+2];
+        let max=Math.max(r,g,b), min=Math.min(r,g,b);
+        kokku++;
+        if(max>60 && max-min<0.2*max){ sr+=r; sg+=g; sb+=b; n++; }
+      }
+      if(n<kokku*0.04) return [1,1,1];
+      let m=(sr+sg+sb)/3;
+      return [sr,sg,sb].map(v=>Math.min(1.6,Math.max(0.6,m/v)));
+    }
+
+    function pikslVarv(r,green,b){
+      r=Math.min(255,r*gains[0]); green=Math.min(255,green*gains[1]); b=Math.min(255,b*gains[2]);
+      let max=Math.max(r,green,b), min=Math.min(r,green,b), d=max-min;
+      if(max<35 || d<20) return "";           // liiga tume või hall/valge (ülevalgustatud)
+      let sat=d/max, h;
+      if(max===r) h=((green-b)/d+6)%6;
+      else if(max===green) h=(b-r)/d+2;
+      else h=(r-green)/d+4;
+      h*=60;
+      if(h>=165 && h<=265 && sat>0.17) return "sinine";
+      if((h<=20 || h>=335) && sat>0.38 && r>=70) return "punane";
+      return "";
+    }
+
+    function tuvastaVarv(d){
+      let sinist=0, punast=0, n=d.data.length/4;
+      for(let i=0;i<d.data.length;i+=4){
+        let v=pikslVarv(d.data[i],d.data[i+1],d.data[i+2]);
+        if(v==="sinine") sinist++;
+        else if(v==="punane") punast++;
+      }
+      let osa=n*0.3;                         // värviline paber katab vähemalt 30% ruudust
+      if(sinist>osa && sinist>=punast) return "sinine";
+      if(punast>osa) return "punane";
+      return "";
+    }
+
+    function capture(){
+      if(!player.videoWidth) return;
+      let pausil=Date.now()<tuvastusPausini;
+      // Lõuend on kaamera proportsioonis ja suur, et pilt ei oleks ruuduline
+      let w=640, h=Math.round(640*player.videoHeight/player.videoWidth);
+      if(!lugeja){
+        lugeja=document.createElement("canvas");
+        lugejaG=lugeja.getContext("2d",{willReadFrequently:true});
+      }
+      if(lugeja.width!==w || lugeja.height!==h){ lugeja.width=w; lugeja.height=h; }
+      lugejaG.drawImage(player,0,0,w,h);
+
+      // Laud on ruut, mille suurus ja asukoht tulevad liuguritest (protsentides)
+      let kylg=Math.floor(Math.min(w,h)*parseInt(document.getElementById("suurus").value)/100);
+      let x0=Math.floor((w-kylg)*parseInt(document.getElementById("vasak").value)/100);
+      let y0=Math.floor((h-kylg)*parseInt(document.getElementById("ylal").value)/100);
+      let ruut=Math.floor(kylg/3);
+      let sisu=Math.floor(ruut*0.7);
+      let serv=Math.floor((ruut-sisu)/2);
+
+      gains=arvutaVordlus(lugejaG.getImageData(x0,y0,ruut*3,ruut*3));
+      let lugemine=[];
+      for(let i=0;i<9;i++){
+        let x=x0+(i%3)*ruut;
+        let y=y0+Math.floor(i/3)*ruut;
+        lugemine.push(tuvastaVarv(lugejaG.getImageData(x+serv,y+serv,sisu,sisu)));
+      }
+      viimaneLugemine=lugemine;
+      geo={w,h,x0,y0,ruut,sisu,serv};
+
+      document.getElementById("lugu").textContent=
+        lugemine.map(v=>v==="sinine"?"X":v==="punane"?"O":"_").join("").replace(/(...)/g,"$1\n");
+
+      if(pausil){ eelmine=""; kaadreid=0; return; }
+
+      // Sama lugemine 4 kaadrit järjest (~0,8 s), siis usaldame.
+      // Kui lugemine püsib, vaadatakse seda edasi igal kaadril, nii ei jää
+      // käik märkamata, kui see tuli siis, kui arvuti alles mõtles.
+      let tekst=lugemine.join(",");
+      if(tekst===eelmine) kaadreid++;
+      else { eelmine=tekst; kaadreid=1; }
+
+      if(kaadreid>=4) kasitle(lugemine);
+    }
+
+    function kasitle(lugemine){
+      if(kaik==="lõpp" || kaik==="mõtleb") return;
+
+      // Uus paber on ruut, kus loetakse värvi ja see erineb mäletatust.
+      // Tühjaks loetud ruute (käsi ees, vari) ei peeta muutuseks.
+      let uued=[];
+      for(let i=0;i<9;i++){
+        if(lugemine[i]!=="" && lugemine[i]!==laud[i]) uued.push(i);
+      }
+      if(uued.length===0) return;
+
+      if(kaik==="inimene"){
+        let i=uued[0];
+        if(uued.length>1) teata("Laual on liiga palju muutusi. Pane tagasi liigne paber või vajuta Uus mäng.");
+        else if(laud[i]!=="") teata("Ruut "+(i+1)+" on juba hõivatud. Vali tühi ruut.");
+        else if(lugemine[i]!=="sinine") teata("Pane ruutu sinine paber, mitte punane.");
+        else{
+          laud[i]="sinine";
+          salvesta("sinine",i+1);
+          if(lopp()) return;
+          kaik="mõtleb";
+          arvutiKaik();
+        }
+      }
+      else if(kaik==="arvuti"){
+        let teised=uued.filter(i=>i!==arvutiRuut);
+        if(teised.length>0) teata("Ära pane teistesse ruutudesse pabereid. Pane punane paber ruutu "+(arvutiRuut+1)+".");
+        else if(lugemine[arvutiRuut]==="punane"){
+          laud[arvutiRuut]="punane";
+          salvesta("punane",arvutiRuut+1);
+          if(lopp()) return;
+          kaik="inimene";
+          teata("Sinu käik: pane sinine paber tühja ruutu.");
+        }
+        else teata("Pane punane paber ruutu "+(arvutiRuut+1)+".");
+      }
+    }
+
+    async function arvutiKaik(){
+      teata("Arvuti mõtleb...");
+      let minuMang=mangunr;
+      let ruut=await serveriKaik();
+      if(minuMang!==mangunr) return;         // vahepeal alustati uut mängu
+      arvutiRuut=ruut;
+      if(!(arvutiRuut>=0 && arvutiRuut<9)){
+        kaik="inimene";
+        teata("Arvuti ei leidnud käiku. Vajuta Uus mäng.");
+        return;
+      }
+      kaik="arvuti";
+      teata("Arvuti käik: pane punane paber ruutu "+(arvutiRuut+1)+".");
+    }
+
+    function voitja(l){
+      for(let j of jooned){
+        if(l[j[0]]!=="" && l[j[0]]===l[j[1]] && l[j[0]]===l[j[2]]) return l[j[0]];
+      }
+      return l.includes("") ? "" : "viik";
+    }
+
+    function hinne(l,kes){
+      let v=voitja(l);
+      if(v==="punane") return 1;
+      if(v==="sinine") return -1;
+      if(v==="viik") return 0;
+      let hinded=[];
+      for(let i=0;i<9;i++){
+        if(l[i]===""){
+          l[i]=kes;
+          hinded.push(hinne(l,kes==="punane"?"sinine":"punane"));
+          l[i]="";
+        }
+      }
+      return kes==="punane" ? Math.max(...hinded) : Math.min(...hinded);
+    }
+
+    function parim(){
+      let parimHinne=-2, valik=[];
+      for(let i=0;i<9;i++){
+        if(laud[i]===""){
+          laud[i]="punane";
+          let h=hinne(laud,"sinine");
+          laud[i]="";
+          if(h>parimHinne){ parimHinne=h; valik=[i]; }
+          else if(h===parimHinne) valik.push(i);
+        }
+      }
+      return valik[Math.floor(Math.random()*valik.length)];
+    }
+
+    function lopp(){
+      let v=voitja(laud);
+      if(v==="") return false;
+      kaik="lõpp";
+      salvesta("lõpp-"+v,"-");
+      if(v==="sinine") teata("SINA VÕITSID! Vajuta Uus mäng.","green");
+      else if(v==="punane") teata("ARVUTI (PUNANE) VÕITIS! Vajuta Uus mäng.","red");
+      else teata("VIIK! Vajuta Uus mäng.","gray");
+      return true;
+    }
+
+    function laudTekst(){
+      return laud.map(v=>v==="sinine"?"X":v==="punane"?"O":"_").join("");
+    }
+
+    // Server arvutab käigu; kui ei vasta, arvutab brauser ise
+    async function serveriKaik(){
+      try{
+        let vastus=await fetch(KONTROLLER+"?kask="+encodeURIComponent("arvuti|"+laudTekst()),{signal:AbortSignal.timeout(6000)});
+        let ruut=parseInt(await vastus.text());
+        if(ruut>=0 && ruut<9 && laud[ruut]==="") return ruut;
+      }
+      catch(e){}
+      return parim();
+    }
+
+    // Seis läheb kahte kohta, mõlemad ükshaaval järjekorras, et uusim seis oleks viimane:
+    // 1) oma server (arvutivaate allikas), 2) Google Sheets (ajalugu)
+    let serveriJarjekord=Promise.resolve(), googleJarjekord=Promise.resolve();
+    async function serverisse(keha){
+      for(let katse=0;katse<2;katse++){
+        try{
+          let v=await fetch("/kaik",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(keha),signal:AbortSignal.timeout(4000)});
+          if(v.ok) return;
+        }
+        catch(e){}
+      }
+    }
+    function salvesta(kes,ruut){
+      let laudiSeis=laudTekst();
+      serveriJarjekord=serveriJarjekord.then(()=>serverisse({kes,ruut,laud:laudiSeis}));
+      if(KONTROLLER!==""){
+        let url=KONTROLLER+"?kask="+encodeURIComponent("kaik|"+kes+"|"+ruut+"|"+laudiSeis);
+        googleJarjekord=googleJarjekord.then(()=>fetch(url,{mode:"no-cors",signal:AbortSignal.timeout(8000)}).catch(()=>{}));
+      }
+      return serveriJarjekord;
+    }
+
+    function teata(tekst,taust){
+      let el=document.getElementById("s1");
+      el.textContent=tekst;
+      el.style.background=taust||"#eee";
+      el.style.color=taust ? "white" : "black";
+    }
+
+    async function uus(){
+      mangunr++;
+      laud=["","","","","","","","",""];
+      kaik="inimene";
+      arvutiRuut=-1;
+      eelmine="";
+      kaadreid=0;
+      teata("Sinu käik: pane sinine paber tühja ruutu.");
+      await salvesta("uus","-");             // vaateleht tühjendab laua
+    }
+
+  </script>
+</head>
+
+<body onload="start();uus()" style="margin:0;font-family:sans-serif">
+
+  <p id="s1" style="position:sticky;top:0;margin:0;padding:12px;font-size:22px;font-weight:bold;z-index:5"></p>
+
+  <p style="margin:10px 12px">Telefon on kaamera: hoia kogu paberlaud pildis ja kasuta sinist/punast paberit.</p>
+  <p id="peerStaatus">PeerJS-i ühenduse loomine...</p>
+  <p>Telefoni ühenduse ID: <strong id="peerId">—</strong></p>
+
+  <video id="v1" autoplay playsinline muted style="position:absolute;width:1px;height:1px;opacity:0"></video>
+
+  <canvas id="c1" width="640" height="480" style="width:100%;max-width:700px;display:block"></canvas>
+
+  <pre id="lugu" style="font-size:28px;margin:8px 12px">___
+___
+___</pre>
+
+  <p style="margin:8px 12px" oninput="tuvastusPausini=Date.now()+1500">
+    Laua suurus <input type="range" id="suurus" min="30" max="100" value="80" style="width:60%"><br>
+    Vasak/parem <input type="range" id="vasak" min="0" max="100" value="50" style="width:60%"><br>
+    Üles/alla <input type="range" id="ylal" min="0" max="100" value="50" style="width:60%">
+  </p>
+
+  <button onclick="uus()" style="font-size:22px;padding:12px 20px;margin:0 12px 20px">Uus mäng</button>
+
+</body>
+</html>
