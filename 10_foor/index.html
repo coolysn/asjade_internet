@@ -4,6 +4,34 @@
 <meta charset="utf-8">
 <title>Foor</title>
 </head>
+<style>
+  .foorid {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+  }
+  .silt {
+  text-align: center;
+  font-weight: bold;
+  }
+  .foor {
+    background: black;
+    padding: 10px;
+    border-radius: 10px;
+  }
+  .tuli { 
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: #444;
+    margin: 5px;
+  }
+
+  #ap.on, #jp.on {background: red;}
+  #ak.on {background: yellow;}
+  #ar.on, #jr.on {background: lime;}
+
+</style>
 <body>
 
 <h1>Foor</h1>
@@ -40,11 +68,49 @@
 </p>
 
 <h2>Olek</h2>
+<div class="foorid">
+  <div>
+    <div class="foor">
+      <div class="tuli" id="ap"></div>
+      <div class="tuli" id="ak"></div>
+      <div class="tuli" id="ar"></div>
+    </div>
+    <p class="silt">Autod</p>
+  </div>
+  <div>
+    <div class="foor">
+      <div class="tuli" id="jp"></div>
+      <div class="tuli" id="jr"></div>
+    </div>
+    <p class="silt">Jalakäijad</p>
+  </div>
+</div>
 <p>Režiim: <span id="reziim">-</span></p>
 <p>Foor praegu: <span id="olek">-</span></p>
 <p>Autode roheline: <span id="auto">-</span> s, jalakäija roheline: <span id="jalak">-</span> s</p>
 
 <script>
+const TULED = {
+AUTODE_ROHELINE: [0,0,1, 1,0],
+ROHELINE_VILGUB: [0,0,1, 1,0],
+KOLLANE:         [0,1,0, 1,0],
+KOIK_PUNASED_1:  [1,0,0, 1,0],
+JALAK_ROHELINE:  [1,0,0, 0,1],
+JALAK_VILGUB:    [1,0,0, 0,1],
+KOIK_PUNASED_2:  [1,0,0, 1,0],
+PUNANE_KOLLANE:  [1,1,0, 1,0],
+KOLLANE_VILGUB:  [0,1,0, 0,0]
+};
+
+function naitaTulesid(olek){
+  const t = TULED[olek];
+  if (!t) return;
+  const idd = ["ap", "ak", "ar", "jp", "jk", "jr"];
+  for (let i = 0; i < 6; i++){
+    document.getElementById(idd[i]).classList.toggle("on", t[i]== 1);
+  }
+}
+
 let kirjutaja = null;
 
 document.getElementById("yhenda").onclick = async function () {
@@ -98,6 +164,7 @@ async function loe(lugeja) {
         const s = JSON.parse(rida);
         document.getElementById("reziim").textContent = s.reziim;
         document.getElementById("olek").textContent = s.olek;
+        naitaTulesid(s.olek);
         document.getElementById("auto").textContent = s.auto;
         document.getElementById("jalak").textContent = s.jalak;
 
