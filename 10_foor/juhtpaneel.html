@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="et">
+<head>
+<meta charset="utf-8">
+<title>Foori juhtpaneel</title>
+</head>
+<body>
+
+<h1>Foori juhtpaneel</h1>
+
+<h2>Füüsiline foor (Arduino)</h2>
+<p>
+  <button id="yhenda">Ühenda Arduino</button>
+  <span id="yhendus">Pole ühendatud</span>
+</p>
+<p>Arduino vastus: <span id="vastus">-</span></p>
+
+<h2>Režiim</h2>
+<p>
+  <button onclick="muudaReziimi('AUTO')">Automaatne</button>
+  <button onclick="muudaReziimi('NUPP')">Nupuga ülekäik</button>
+  <button onclick="muudaReziimi('VILKUV')">Vilkuv kollane</button>
+</p>
+
+<h2>Jalakäija nupp</h2>
+<p>
+  <button onclick="vajutaNuppu()">Vajuta, et üle minna</button>
+  <span id="nuppInfo"></span>
+</p>
+
+<h2>Tsükkel</h2>
+<p>Autode roheline (5-120 s): <input type="number" id="autoAeg" min="5" max="120"></p>
+<p>Jalakäija roheline (5-60 s): <input type="number" id="jalakAeg" min="5" max="60"></p>
+<p>Rohelise laine nihe (s, võib olla negatiivne): <input type="number" id="niheAeg" step="0.5"></p>
+<p><button onclick="salvesta()">Salvesta</button></p>
+
+<h2>Olek</h2>
+<p>Kell: <span id="kellInfo">sünkroniseerin...</span></p>
+<p>Režiim: <span id="reziim">-</span>, tsükli pikkus: <span id="tsykkel">-</span> s</p>
+<p>Füüsiline foor: <span id="fyysiline">-</span></p>
+<p>Veebifoor: <span id="veebifoor">-</span></p>
+
+<script src="yhine.js"></script>
+<script>
+let seaded = loeSeaded();
+let kirjutaja = null;
+
+// Väljad täidame salvestatud seadetega
+document.getElementById("autoAeg").value = seaded.auto;
+document.getElementById("jalakAeg").value = seaded.jalak;
+document.getElementById("niheAeg").value = seaded.nihe;
+
+// ---------- Seadete muutmine ----------
+// Uued seaded lähevad korraga veebifoorile (localStorage) ja Arduinole (USB)
+function rakenda() {
+  salvestaSeaded(seaded);
+  saadaSeaded();
+}
+
+function muudaReziimi(r) {
+  seaded.reziim = r;
+  seaded.nupuAlgus = -1;      // vana nupuvajutus unustatakse
+  rakenda();
+}
+
+function salvesta() {
+  seaded.auto  = Math.min(120, Math.max(5, Number(document.getElementById("autoAeg").value)));
+  seaded.jalak = Math.min(60,  Math.max(5, Number(document.getElementById("jalakAeg").value)));
+  seaded.nihe  = Number(document.getElementById("niheAeg").value) || 0;
+  rakenda();
+}
+
+function vajutaNuppu() {
+  if (seaded.reziim != "NUPP") {
+    document.getElementById("nuppInfo").textContent = "Vali enne režiim „Nupuga ülekäik”.";
+    return;
+  }
+  const k = kell();
+  const eelmiseLopp = seaded.nupuAlgus + tsykliPikkus(seaded) - seaded.auto * 1000;
+  if (seaded.nupuAlgus >= 0 && k < eelmiseLopp) {
+    document.getElementById("nuppInfo").textContent = "Ülekäik on juba tulemas.";
+    return;
+  }
+  // Algusaeg 1 s tulevikus, et käsk jõuaks mõlemasse foori enne algust.
+  // Pärast eelmist ülekäiku saavad autod vähemalt 5 s rohelist.
+  seaded.nupuAlgus = Math.max(k + 1000, eelmiseLopp + 5000);
+  document.getElementById("nuppInfo").textContent = "Oota rohelist...";
+  rakenda();
+}
+
+// ---------- Arduino (USB) ----------
+document.getElementById("yhenda").onclick = async function () {
+  if (!("serial" in navigator)) {
+    alert("Kasuta Chrome'i või Edge'i brauserit.");
+    return;
+  }
+  try {
+    const port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 9600 });
+
+    const enc = new TextEncoderStream();
+    enc.readable.pipeTo(port.writable);
+    kirjutaja = enc.writable.getWriter();
+
+    const dec = new TextDecoderStream();
+    port.readable.pipeTo(dec.writable);
+    loe(dec.readable.getReader());
+
+    document.getElementById("yhendus").textContent = "Ühendatud";
+    // Arduino taaskäivitub ühendamisel, ootame 2,5 s ja saadame kella + seaded
+    setTimeout(function () {
+      saadaKell();
+      saadaSeaded();
+    }, 2500);
+  } catch (e) {
+    document.getElementById("yhendus").textContent = "Viga: " + e.message;
+  }
+};
+
+async function saada(kask) {
+  if (!kirjutaja) return;          // Arduino pole ühendatud – veebifoor töötab ikka
+  await kirjutaja.write(kask + "\n");
+}
+
+// Saadame Arduinole õige kellaaja. +15 ms on aeg, mis kulub käsu teele USB-s.
+function saadaKell() {
+  saada("AEG " + Math.round((kell() + 15) % PAEV));
+}
+
+async function saadaSeaded() {
+  await saada("REZIIM " + seaded.reziim);
+  await saada("AUTO " + seaded.auto);
+  await saada("JALAK " + seaded.jalak);
+  await saada("START " + Math.round(seaded.nupuAlgus));
+}
+
+async function loe(lugeja) {
+  let puhver = "";
+  while (true) {
+    const { value, done } = await lugeja.read();
+    if (done) break;
+    puhver += value;
+    let i;
+    while ((i = puhver.indexOf("\n")) >= 0) {
+      document.getElementById("vastus").textContent = puhver.slice(0, i).trim();
+      puhver = puhver.slice(i + 1);
+    }
+  }
+}
+
+// ---------- Olek ekraanile ----------
+function naitaOlekut() {
+  const k = kell();
+  document.getElementById("reziim").textContent = seaded.reziim;
+  document.getElementById("tsykkel").textContent = tsykliPikkus(seaded) / 1000;
+  document.getElementById("fyysiline").textContent = foorOlek(seaded, k, 0);
+  document.getElementById("veebifoor").textContent = foorOlek(seaded, k, seaded.nihe);
+  if (seaded.reziim == "NUPP" && foorOlek(seaded, k, 0).startsWith("JALAK")) {
+    document.getElementById("nuppInfo").textContent = "Mine üle!";
+  }
+}
+
+// ---------- Käivitamine ----------
+synkroniseeriKell().then(function (tekst) {
+  document.getElementById("kellInfo").textContent = tekst;
+  saadaKell();
+});
+setInterval(saadaKell, 30000);   // Arduino kell triivib, parandame iga 30 s järel
+setInterval(naitaOlekut, 200);
+</script>
+
+</body>
+</html>

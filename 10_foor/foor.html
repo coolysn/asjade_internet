@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="et">
+<head>
+<meta charset="utf-8">
+<title>Veebifoor</title>
+<style>
+  .foorid { display: flex; gap: 20px; align-items: flex-start; }
+  .silt { text-align: center; font-weight: bold; }
+  .foor { background: black; padding: 10px; border-radius: 10px; }
+  .tuli { width: 50px; height: 50px; border-radius: 50%; background: #444; margin: 5px; }
+  #ap.on, #jp.on { background: red; }
+  #ak.on         { background: yellow; }
+  #ar.on, #jr.on { background: lime; }
+</style>
+</head>
+<body>
+
+<h1>Veebifoor</h1>
+
+<div class="foorid">
+  <div>
+    <div class="foor">
+      <div class="tuli" id="ap"></div>
+      <div class="tuli" id="ak"></div>
+      <div class="tuli" id="ar"></div>
+    </div>
+    <p class="silt">Autod</p>
+  </div>
+  <div>
+    <div class="foor">
+      <div class="tuli" id="jp"></div>
+      <div class="tuli" id="jr"></div>
+    </div>
+    <p class="silt">Jalakäijad</p>
+  </div>
+</div>
+
+<p>Kell: <span id="kellInfo">sünkroniseerin...</span></p>
+<p>Režiim: <span id="reziim">-</span>, olek: <span id="olek">-</span>, nihe: <span id="nihe">-</span> s</p>
+
+<script src="yhine.js"></script>
+<script>
+let seaded = loeSeaded();
+
+// Kui juhtpaneel muudab seadeid, saab see leht kohe teada
+window.addEventListener("storage", function () {
+  seaded = loeSeaded();
+});
+
+function joonista() {
+  const k = kell();
+  const olek = foorOlek(seaded, k, seaded.nihe);   // veebifoor kasutab nihet
+  const t = TULED[olek];
+  const vilgub = (k % 1000) < 500;                 // sama vilkumine nagu Arduinol
+
+  const idd = ["ap", "ak", "ar", "jp", "jr"];
+  for (let i = 0; i < 5; i++) {
+    const poleb = t[i] == 1 || (t[i] == 2 && vilgub);
+    document.getElementById(idd[i]).classList.toggle("on", poleb);
+  }
+
+  document.getElementById("reziim").textContent = seaded.reziim;
+  document.getElementById("olek").textContent = olek;
+  document.getElementById("nihe").textContent = seaded.nihe;
+}
+
+// Käivitamisel küsime õige aja, siis kontrollime iga 10 minuti järel uuesti
+synkroniseeriKell().then(function (tekst) {
+  document.getElementById("kellInfo").textContent = tekst;
+});
+setInterval(function () {
+  synkroniseeriKell().then(function (tekst) {
+    document.getElementById("kellInfo").textContent = tekst;
+  });
+}, 600000);
+
+setInterval(joonista, 50);   // uuendame tulesid 20 korda sekundis
+</script>
+
+</body>
+</html>
